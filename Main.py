@@ -9,6 +9,19 @@ class Main:
         while self.running:
             for event in pygame.event.get():
                 self.running = not self.is_exit_button_pressed(event)
+            self.update_background()
+            self.update_pygame()
+            self.update_frames()
+
+    def update_frames(self):
+        self.clock.tick(60)
+
+    def update_background(self):
+        self.window.fill((40, 40, 40))
+
+    @staticmethod
+    def update_pygame():
+        pygame.display.update()
 
     @staticmethod
     def is_exit_button_pressed(event):
@@ -16,3 +29,6 @@ class Main:
             if event.key == pygame.K_BACKSPACE:
                 return True
         return False
+
+if __name__ == '__main__':
+    Main().update()
