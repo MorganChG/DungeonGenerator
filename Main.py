@@ -5,13 +5,20 @@ import pygame
 class DungeonVisualizer:
     def __init__(self, window):
         self.window = window
+        pygame.init()
+        self.font = pygame.font.Font("freesansbold.ttf", 10)
 
     def draw(self, rooms, edges):
         for room in rooms:
+            #self.draw_index(room, rooms)
             self.draw_room(self.get_corners(room.get_position(), room.get_width(), room.get_height()))
             #self.draw_door(room)
         for i in range(len(edges)):
             pygame.draw.line(self.window, (200,200,200), edges[i][0].get_position(), edges[i][1].get_position(), 2)
+
+    def draw_index(self, room, rooms):
+        text = self.font.render(str(rooms.index(room)), True, (255, 255, 255))
+        self.window.blit(text, room.get_position())
 
     def draw_room(self, corners):
         for i in range(0, len(corners) // 2):
@@ -30,11 +37,18 @@ class DungeonVisualizer:
                 (x + room_width//2, y - room_height // 2),    #Top Right Corner
                 (x - room_width//2, y + room_height // 2),    #Bottom Left Corner
                 (x + room_width//2, y + room_height // 2)]    #Bottom Right Corner
-
-
 class DungeonGenerator:
-    def __init__(self):
-        self.number_of_rooms = 20
+    def __init__(self, number_of_rooms, size):
+        self.number_of_rooms = number_of_rooms
+        self.check_number_of_rooms(size)
+
+    def check_number_of_rooms(self, size):
+        if not self.is_proper_number_of_rooms(size):
+            proper_size = (600 // (size * 2)) ** 2
+            raise Exception(f"too many rooms for room_size try : {proper_size}")
+
+    def is_proper_number_of_rooms(self, size):
+        return self.number_of_rooms <= (600 // (size * 2)) ** 2
 
     @staticmethod
     def get_next_room_height(door, height):
@@ -64,30 +78,40 @@ class DungeonGenerator:
             else: return door_position[1] + distance // 2
         return door_position[1]
 
+    @staticmethod
+    def is_not_already_a_room(offset_x, offset_y, rooms):
+        for room in rooms:
+            if (offset_x, offset_y) == room.get_position():
+                return False
+        return True
+
+
+    @staticmethod
+    def is_within_bounds(offset_x, offset_y):
+        return 0 < offset_x < 600 and 0 < offset_y < 600
+
     def generate(self, rooms, path):
         index = 0
-        while len(rooms) < self.number_of_rooms + 1:
-            print(len(rooms), index)
+        while len(rooms) < self.number_of_rooms:
             if index >= 0:
-                door = rooms[index].pick_door()
-                if door is not None:
-                    #self.number_of_rooms += len(rooms[index].get_doors()) + 1
+                if len(rooms[index].get_doors()) > 0:
+                    door = rooms[index].pick_door()
                     offset_x = self.offset_x(rooms[index].get_position(), door.get_position(), rooms[index].get_width() * 2)
                     offset_y = self.offset_y(rooms[index].get_position(), door.get_position(), rooms[index].get_height() * 2)
-                    if 0 < offset_x < 600 and 0 < offset_y < 600:
+                    if self.is_within_bounds(offset_x, offset_y):
                         new_door = Door(offset_x,offset_y)
-                        new_room = Room(self.offset_x(rooms[index].get_position(), new_door.get_position(), rooms[index].get_width()),
-                                        self.offset_y(rooms[index].get_position(), new_door.get_position(), rooms[index].get_height()),
-                                        rooms[index].get_width(), rooms[index].get_height())
-                        path.add(door, new_door)
-                        new_room.remove_door_from_position(new_door.get_position())
-                        rooms.append(new_room)
-                        index += 1
+                        room_x = self.offset_x(rooms[index].get_position(), new_door.get_position(),rooms[index].get_width())
+                        room_y = self.offset_y(rooms[index].get_position(), new_door.get_position(), rooms[index].get_height())
+                        if self.is_not_already_a_room(room_x, room_y, rooms):
+                            new_room = Room(room_x,room_y,rooms[index].get_width(), rooms[index].get_height())
+                            path.add(door, new_door)
+                            new_room.remove_door_from_position(new_door.get_position())
+                            rooms.append(new_room)
+                            index += 1
                 else:
                     index -= 1
             else:
-                break
-
+                index = len(rooms) - 1
 
 class Path:
     def __init__(self):
@@ -98,6 +122,9 @@ class Path:
 
     def get_path(self):
         return self.path
+
+    def clear(self):
+        self.path = []
 
 
 class Door:
@@ -117,14 +144,13 @@ class Room:
         self.height = height
 
         self.doors = self.set_doors()
-        #self.remove_doors()
+        #print(self.doors)
 
     def pick_door(self):
-        if len(self.doors) > 0:
-            door = random.choice(self.doors)
-            self.remove_door(door)
-            return door
-        return None
+        #print(self.doors)
+        door = random.choice(self.doors)
+        self.remove_door(door)
+        return door
 
     def remove_doors(self):
         for i in range(random.randint(1,len(self.doors)-1)):
@@ -132,8 +158,7 @@ class Room:
             self.doors.pop(index)
 
     def remove_door(self, door):
-        index = self.doors.index(door)
-        self.doors.pop(index)
+        self.doors.remove(door)
 
     def remove_door_from_position(self, door_position):
         for door in self.doors:
@@ -172,12 +197,15 @@ class Main:
         self.window = pygame.display.set_mode((600, 600), pygame.NOFRAME)
         self.clock = pygame.time.Clock()
         self.running = True
+        self.room_size = 40
+
         self.path = Path()
         self.visualizer = DungeonVisualizer(self.window)
-        self.generator = DungeonGenerator()
+        self.generator = DungeonGenerator(49, self.room_size)
+        self.starting_room = Room(300, 300, self.room_size, self.room_size)
 
-        self.starting_room = Room(300, 300, 40, 40)
         self.rooms = [self.starting_room]
+
         self.generator.generate(self.rooms, self.path)
 
     def update(self):
@@ -187,10 +215,10 @@ class Main:
             self.update_background()
             self.visualizer.draw(self.rooms, self.path.get_path())
             self.update_pygame()
-            self.update_frames()
+            #self.update_frames()
 
     def update_frames(self):
-        self.clock.tick(10)
+        self.clock.tick(60)
 
     def update_background(self):
         self.window.fill((40, 40, 40))
